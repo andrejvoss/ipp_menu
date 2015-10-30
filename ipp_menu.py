@@ -21,7 +21,6 @@ along with ipp_menu.  If not, see <http://www.gnu.org/licenses/>.
 from pdfminer.pdfdocument import PDFDocument
 from pdfminer.pdfparser import PDFParser
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
-#from pdfminer.pdfdevice import PDFDevice, TagExtractor
 from pdfminer.pdfpage import PDFPage
 from pdfminer.converter import XMLConverter, HTMLConverter, TextConverter
 from pdfminer.cmapdb import CMapDB
@@ -30,6 +29,8 @@ import re
 from datetime import timedelta
 from datetime import datetime
 import urllib2
+import pickle as pkl
+import os
 
 class TextReciver(object):
     def __init__(self):
@@ -68,10 +69,22 @@ def parse_pdf(file_name):
 
 
 class Menu(object):
-    def __init__(self):
-        self.days = []
+    def __init__(self, load_old=True):
+        self.days = {}
 
-    def add_pdf_to_menu(self, path):
+        if load_old:
+            self.load_old_dates()
+
+    def load_old_dates(self):
+        for root, dirs, files in os.walk('./tmp'):
+            for name in files:
+                if name.endswith((".pkl")):
+                   fl = open(os.path.join(root, name), 'r')
+                   date = pkl.load(fl)
+                   self.days[date.date] = date
+                   fl.close
+
+    def add_pdf_to_menu(self, path, store=True):
         # Generate a general menu
         start_index = len(self.days)
         #Read the file
@@ -80,10 +93,11 @@ class Menu(object):
         # Find all dates in the file
         dates = list(re.finditer('[0-9]{1,2}\.[0-9]{1,2}\.20[0-9]{2}', text))
 
+        day_list = []
         # Add dates to the menu
         for date in dates:
             dd = datetime.strptime(date.group(0), "%d.%m.%Y")
-            self.add_day(dd)
+            day_list.append(self.add_day(dd))
 
         #extract the text between the date entries
         text_pos = [d.start() for d in dates] + [len(text)]
@@ -97,38 +111,56 @@ class Menu(object):
             meals = [(m[0] + m[1]).strip('\n') for m in meals]
 
             for meal in meals:
-                 self.days[start_index + i].add_dish(meal)
+                 day_list[i].add_dish(meal)
+
+        if store:
+            for i in day_list:
+                i.save_day()
 
     def today(self):
         today = datetime.today().date()
 
-        for day in self.days:
-            if day.date == today:
-                day.print_menu()
-
+        if today in self.days:
+            self.days[today].print_menu()
+        else:
+            print "No menu for " + tomorrow.strftime("%d.%m.%Y")
 
     def tomorrow(self):
 
         today = datetime.today().date()
         tomorrow = today + timedelta(days=1)
 
-        found = False
-        for day in self.days:
-            if day.date == tomorrow:
-                day.print_menu()
-                found = True
-        if not found:
+        if tomorrow in self.days:
+            self.days[today].print_menu()
+        else:
             print "No menu for " + tomorrow.strftime("%d.%m.%Y")
 
     def add_day(self, date):
-        day =day_menu(date)
-        self.days.append(day)
+        day = day_menu(date)
+        self.days[date.date()] = day
         return day
+
+    def find_in_menu(self, string):
+
+        found_in = []
+        for k, i in self.days.iteritems():
+            for d in i.dishes:
+                if string.lower() in d.lower():
+                    found_in.append(i)
+        return found_in
+
+
 
 class day_menu(object):
     def __init__(self, date):
         self.date = date.date()
         self.dishes = []
+
+    def save_day(self):
+        filename = self.date.strftime("./tmp/%Y_%m_%d.pkl")
+        fl = open(filename, 'w')
+        pkl.dump(self, fl)
+        fl.close()
 
     def add_dish(self, dish_desciption):
         self.dishes.append(dish_desciption)
