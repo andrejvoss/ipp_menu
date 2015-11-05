@@ -145,11 +145,6 @@ def extract_price_from_pdf(file_name):
     pos_list.sort()
     pos, price_list = zip(*pos_list)
     
-    import time
-    time.time()
-    ftemp = open(str(time.time()), 'w')
-    ftemp.write(outfp.text)
-    ftemp.close()
     return price_list
 
 
@@ -267,12 +262,11 @@ class day_menu(object):
 
     def print_menu(self):
         for i in self.dishes:
-            print i.description + '\033[1m' + '   %.2f €' %i.price + '\033[0m'
+            print i.description + '   %.2f €' %i.price
 
     def __repr__(self):
         repr = "<Menu for the " + self.date.strftime("%d.%m.%Y") + ">"
         return repr
-
 
 menu = Menu()
 
