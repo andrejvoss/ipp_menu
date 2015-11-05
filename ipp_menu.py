@@ -76,7 +76,7 @@ class Menu(object):
             self.load_old_dates()
 
     def load_old_dates(self):
-        for root, dirs, files in os.walk('./tmp'):
+        for root, dirs, files in os.walk('./archive'):
             for name in files:
                 if name.endswith((".pkl")):
                    fl = open(os.path.join(root, name), 'r')
@@ -107,7 +107,7 @@ class Menu(object):
 
         # Extract the single menus
         for i, db in enumerate(date_blocks):
-            meals = re.findall('(\n[0-9]\.[A-z| ].*)(\n +.*)?', db)
+            meals = re.findall('(\n[0-9]\.[A-z| |0-9][A-z| ].+)(\n +.*)?', db)
             meals = [(m[0] + m[1]).strip('\n') for m in meals]
 
             for meal in meals:
@@ -157,7 +157,7 @@ class day_menu(object):
         self.dishes = []
 
     def save_day(self):
-        filename = self.date.strftime("./tmp/%Y_%m_%d.pkl")
+        filename = self.date.strftime("./archive/%Y_%m_%d.pkl")
         fl = open(filename, 'w')
         pkl.dump(self, fl)
         fl.close()
