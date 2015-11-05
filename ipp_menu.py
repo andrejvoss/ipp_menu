@@ -1,19 +1,23 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Nov  5 19:22:52 2015
+
+@author: voss
+"""
+
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 '''
 Copyright (C) 2015  Jörg Encke
 This file is part of ipp_menu
-
 auditory_brain is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
-
 auditory_brain is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
-
 You should have received a copy of the GNU General Public License
 along with ipp_menu.  If not, see <http://www.gnu.org/licenses/>.
 '''
@@ -127,13 +131,12 @@ def extract_price_from_pdf(file_name):
             interpreter.process_page(page)
         fp.close()
     device.close()
-    
-    price_text = re.findall('(.*left.*[0-9]{1,2}\.[0-9]{1,2} ?)(\n<br>.{0,100}[0-9]{1,2}\.[0-9]{1,2})?',outfp.text)
+    matches = re.finditer('(.*left.*[0-9]{1,2}\.[0-9]{1,2} )(\n<br>.{0,100}[0-9]{1,2}\.[0-9]{1,2} *)*',outfp.text)    
     pos_list = []
-    for line in price_text:
-        ypos = re.findall('[0-9]+',re.findall('.*top:[0-9]+px', line[0])[0][::-1])[0][::-1]
-        
-        for i,price in enumerate(line):
+    for m in matches:
+        line_group = m.group().split('\n')
+        ypos = re.findall('[0-9]+',re.findall('.*top:[0-9]+px', line_group[0])[0][::-1])[0][::-1]
+        for i,price in enumerate(line_group):
             if len(price):
                 p = float(re.findall('[0-9]{1,2}\.[0-9]{1,2}',price[::-1])[0][::-1])
                 ypos= int(ypos) + i
@@ -141,7 +144,14 @@ def extract_price_from_pdf(file_name):
                 pos_list.append((ypos, p))
     pos_list.sort()
     pos, price_list = zip(*pos_list)
+    
+    import time
+    time.time()
+    ftemp = open(str(time.time()), 'w')
+    ftemp.write(outfp.text)
+    ftemp.close()
     return price_list
+
 
 
 class Menu(object):
@@ -165,15 +175,10 @@ class Menu(object):
         start_index = len(self.days)
         #Read the file
         text = parse_pdf(path)
-
+        #print text
         # Find all dates in the file
         dates = list(re.finditer('[0-9]{1,2}\.[0-9]{1,2}\.20[0-9]{2}', text))
         
-        # Price list
-        pricelist = extract_price_from_pdf(path)
-        print pricelist
-        print
-
         day_list = []
         # Add dates to the menu
         for date in dates:
@@ -186,14 +191,25 @@ class Menu(object):
         for i in range(len(text_pos) - 1):
             date_blocks.append(text[text_pos[i]:text_pos[i+1]])
 
-        # Extract the single menus
+        # Extract the single menus and count meals
+        totalmealnumber = 0
         for i, db in enumerate(date_blocks):        
-            meals = re.findall('(\n[0-9]\.[A-z| |0-9][A-z|  ].+)(\n +.*)?', db)
+            meals = re.findall('(\n[0-9]\..{7,})(\n +.*)?', db)
             meals = [(m[0] + m[1]).strip('\n') for m in meals]
-
             for meal in meals:
-                 dish = day_list[i].add_dish(meal)
-        
+                 totalmealnumber += 1
+                 
+        # Add dishes assign Prices
+        pricelist = extract_price_from_pdf(path)
+        currentmealnumber = 0
+        for i, db in enumerate(date_blocks):        
+            meals = re.findall('(\n[0-9]\..{7,})(\n +.*)?', db)
+            meals = [(m[0] + m[1]).strip('\n') for m in meals]
+            for j, meal in enumerate(meals):
+                dish = day_list[i].add_dish(meal.rstrip())
+                if len(pricelist) == totalmealnumber:                
+                    dish.price = pricelist[currentmealnumber]
+                    currentmealnumber += 1
 
         if store:
             for i in day_list:
@@ -205,7 +221,7 @@ class Menu(object):
         if today in self.days:
             self.days[today].print_menu()
         else:
-            print "No menu for " + tomorrow.strftime("%d.%m.%Y")
+            print "No menu for " + today.strftime("%d.%m.%Y")
 
     def tomorrow(self):
 
@@ -251,7 +267,7 @@ class day_menu(object):
 
     def print_menu(self):
         for i in self.dishes:
-            print i
+            print i.description + '\033[1m' + '   %.2f €' %i.price + '\033[0m'
 
     def __repr__(self):
         repr = "<Menu for the " + self.date.strftime("%d.%m.%Y") + ">"
@@ -276,3 +292,5 @@ for pdf in pdf_links:
     output.close()
 
     menu.add_pdf_to_menu('temp.pdf')
+
+menu.today()
