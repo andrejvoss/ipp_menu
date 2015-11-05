@@ -40,6 +40,34 @@ class TextReciver(object):
         self.text += text
 
 
+def parse_html(file_name):
+    # input option
+    password = ''
+    pagenos = set()
+    maxpages = 0
+    # output option
+    imagewriter = None
+    rotation = 0
+    codec = 'utf-8'
+    caching = True
+    laparams = LAParams()
+    rsrcmgr = PDFResourceManager(caching=caching)
+    outfp = TextReciver()
+    device = HTMLConverter(rsrcmgr, outfp, codec=codec, laparams=laparams,
+                               imagewriter=imagewriter)
+
+    for fname in [file_name]:
+        fp = file(fname, 'rb')
+        interpreter = PDFPageInterpreter(rsrcmgr, device)
+        for page in PDFPage.get_pages(fp, pagenos,
+                                      maxpages=maxpages, password=password,
+                                      caching=caching, check_extractable=True):
+            page.rotate = (page.rotate+rotation) % 360
+            interpreter.process_page(page)
+        fp.close()
+    device.close()
+    return outfp.text
+    
 def parse_pdf(file_name):
     # input option
     password = ''
@@ -66,6 +94,54 @@ def parse_pdf(file_name):
         fp.close()
     device.close()
     return outfp.text
+    
+class Dish(object):
+    def __init__(self, description):
+        self.description = description
+        self.price = None
+        
+
+def extract_price_from_pdf(file_name):
+    # input option
+    password = ''
+    pagenos = set()
+    maxpages = 0
+    # output option
+    imagewriter = None
+    rotation = 0
+    codec = 'utf-8'
+    caching = True
+    laparams = LAParams()
+    rsrcmgr = PDFResourceManager(caching=caching)
+    outfp = TextReciver()
+    device = HTMLConverter(rsrcmgr, outfp, codec=codec, laparams=laparams,
+                               imagewriter=imagewriter)
+
+    for fname in [file_name]:
+        fp = file(fname, 'rb')
+        interpreter = PDFPageInterpreter(rsrcmgr, device)
+        for page in PDFPage.get_pages(fp, pagenos,
+                                      maxpages=maxpages, password=password,
+                                      caching=caching, check_extractable=True):
+            page.rotate = (page.rotate+rotation) % 360
+            interpreter.process_page(page)
+        fp.close()
+    device.close()
+    
+    price_text = re.findall('(.*left.*[0-9]{1,2}\.[0-9]{1,2} ?)(\n<br>.{0,100}[0-9]{1,2}\.[0-9]{1,2})?',outfp.text)
+    pos_list = []
+    for line in price_text:
+        ypos = re.findall('[0-9]+',re.findall('.*top:[0-9]+px', line[0])[0][::-1])[0][::-1]
+        
+        for i,price in enumerate(line):
+            if len(price):
+                p = float(re.findall('[0-9]{1,2}\.[0-9]{1,2}',price[::-1])[0][::-1])
+                ypos= int(ypos) + i
+                
+                pos_list.append((ypos, p))
+    pos_list.sort()
+    pos, price_list = zip(*pos_list)
+    return price_list
 
 
 class Menu(object):
@@ -92,6 +168,11 @@ class Menu(object):
 
         # Find all dates in the file
         dates = list(re.finditer('[0-9]{1,2}\.[0-9]{1,2}\.20[0-9]{2}', text))
+        
+        # Price list
+        pricelist = extract_price_from_pdf(path)
+        print pricelist
+        print
 
         day_list = []
         # Add dates to the menu
@@ -106,12 +187,13 @@ class Menu(object):
             date_blocks.append(text[text_pos[i]:text_pos[i+1]])
 
         # Extract the single menus
-        for i, db in enumerate(date_blocks):
-            meals = re.findall('(\n[0-9]\.[A-z| |0-9][A-z| ].+)(\n +.*)?', db)
+        for i, db in enumerate(date_blocks):        
+            meals = re.findall('(\n[0-9]\.[A-z| |0-9][A-z|  ].+)(\n +.*)?', db)
             meals = [(m[0] + m[1]).strip('\n') for m in meals]
 
             for meal in meals:
-                 day_list[i].add_dish(meal)
+                 dish = day_list[i].add_dish(meal)
+        
 
         if store:
             for i in day_list:
@@ -163,7 +245,9 @@ class day_menu(object):
         fl.close()
 
     def add_dish(self, dish_desciption):
-        self.dishes.append(dish_desciption)
+        dish = Dish(dish_desciption)
+        self.dishes.append(dish)
+        return dish
 
     def print_menu(self):
         for i in self.dishes:
